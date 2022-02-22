@@ -4340,7 +4340,7 @@ export class OpenSeaPort {
         },
         primaryType: "Order",
         message: { ...orderForSigning, nonce: signerOrderNonce.toNumber() },
-      };
+      });
 
       const ecSignature = await signTypedDataAsync(
         this.web3,
