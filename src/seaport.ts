@@ -4330,9 +4330,7 @@ export class OpenSeaPort {
         salt: order.salt.toString(),
       };
 
-      // We don't JSON.stringify as certain wallet providers sanitize this data
-      // https://github.com/coinbase/coinbase-wallet-sdk/issues/60
-      const message = {
+      const message = JSON.stringify({
         types: EIP_712_ORDER_TYPES,
         domain: {
           name: EIP_712_WYVERN_DOMAIN_NAME,
