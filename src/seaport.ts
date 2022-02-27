@@ -4178,9 +4178,25 @@ export class OpenSeaPort {
     // Estimate gas first
     // try {
     //   // Typescript splat doesn't typecheck
-    //   const gasEstimate =
-    //     await wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.estimateGasAsync(
-      const encoded = wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
+    try {
+      const gasEstimate = await wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.estimateGasAsync(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          args[6],
+          args[7],
+          args[8],
+          args[9],
+          args[10]
+      );
+      txnData.gas = this._correctGasAmount(gasEstimate);
+    } catch(err) {
+
+    }
+    const encoded = wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
           args[0],
           args[1],
           args[2],
@@ -4194,7 +4210,6 @@ export class OpenSeaPort {
           args[10],
         );
 
-    //   txnData.gas = this._correctGasAmount(gasEstimate);
     // } catch (error) {
     //   console.error(`Failed atomic match with args: `, args, error);
     //   throw new Error(
