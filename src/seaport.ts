@@ -4193,9 +4193,10 @@ export class OpenSeaPort {
           args[10],
           txnData
       );
+      console.log('estimated gas', gasEstimate);
       txnData.gas = this._correctGasAmount(gasEstimate);
     } catch(err) {
-
+      console.log('estimate gas error:', err);
     }
     const encoded = wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
           args[0],
