@@ -4190,7 +4190,8 @@ export class OpenSeaPort {
           args[7],
           args[8],
           args[9],
-          args[10]
+          args[10],
+          txnData
       );
       txnData.gas = this._correctGasAmount(gasEstimate);
     } catch(err) {
