@@ -4178,6 +4178,8 @@ export class OpenSeaPort {
     // Estimate gas first
     // try {
     //   // Typescript splat doesn't typecheck
+    //SZ: Skip estimating gas
+    /*
     try {
       const gasEstimate = await wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.estimateGasAsync(
           args[0],
@@ -4198,6 +4200,7 @@ export class OpenSeaPort {
     } catch(err) {
       console.log('estimate gas error:', err);
     }
+    */
     const encoded = wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
           args[0],
           args[1],
