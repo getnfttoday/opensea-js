@@ -1,7 +1,7 @@
 import BigNumber from "bignumber.js";
 import { assert } from "chai";
 import { before, suite, test } from "mocha";
-import * as Web3 from "web3";
+import Web3 from "web3";
 import {
   DEFAULT_BUYER_FEE_BASIS_POINTS,
   DEFAULT_MAX_BOUNTY,
@@ -10,10 +10,10 @@ import {
   ENJIN_COIN_ADDRESS,
   MAINNET_PROVIDER_URL,
   NULL_ADDRESS,
-  OPENSEA_FEE_RECIPIENT,
+  OPENSEA_LEGACY_FEE_RECIPIENT,
   OPENSEA_SELLER_BOUNTY_BASIS_POINTS,
 } from "../../constants";
-import { OpenSeaPort } from "../../index";
+import { OpenSeaSDK } from "../../index";
 import {
   FeeMethod,
   Network,
@@ -40,7 +40,7 @@ import {
 
 const provider = new Web3.providers.HttpProvider(MAINNET_PROVIDER_URL);
 
-const client = new OpenSeaPort(
+const client = new OpenSeaSDK(
   provider,
   {
     networkName: Network.Main,
@@ -52,7 +52,7 @@ const client = new OpenSeaPort(
 let asset: OpenSeaAsset;
 const expirationTime = Math.round(Date.now() / 1000 + 60 * 60 * 24); // one day from now
 
-suite("seaport: fees", () => {
+suite("SDK: fees", () => {
   before(async () => {
     const tokenId = MYTHEREUM_TOKEN_ID.toString();
     const tokenAddress = MYTHEREUM_ADDRESS;
@@ -203,7 +203,7 @@ suite("seaport: fees", () => {
   });
 
   test("First page of orders have valid fees", async () => {
-    const { orders } = await client.api.getOrders();
+    const { orders } = await client.api.getOrdersLegacyWyvern();
     assert.isNotEmpty(orders);
 
     orders.forEach((order) => {
@@ -273,7 +273,6 @@ suite("seaport: fees", () => {
       paymentTokenAddress: NULL_ADDRESS,
       extraBountyBasisPoints,
       buyerAddress: NULL_ADDRESS,
-      expirationTime: 0,
       waitForHighestBid: false,
     });
 
@@ -391,7 +390,7 @@ function unitTestFeesBuyOrder({
   assert.equal(+makerProtocolFee, 0);
   assert.equal(+takerProtocolFee, 0);
   assert.equal(+makerReferrerFee, 0);
-  assert.equal(feeRecipient, OPENSEA_FEE_RECIPIENT);
+  assert.equal(feeRecipient, OPENSEA_LEGACY_FEE_RECIPIENT);
   assert.equal(feeMethod, FeeMethod.SplitFee);
 }
 
@@ -405,7 +404,7 @@ export function testFeesMakerOrder(
   if (order.waitingForBestCounterOrder) {
     assert.equal(order.feeRecipient, NULL_ADDRESS);
   } else {
-    assert.equal(order.feeRecipient, OPENSEA_FEE_RECIPIENT);
+    assert.equal(order.feeRecipient, OPENSEA_LEGACY_FEE_RECIPIENT);
   }
   // Public order
   if (makerBountyBPS != null) {
