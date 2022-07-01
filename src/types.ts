@@ -1,6 +1,6 @@
 /* eslint-disable import/no-unused-modules */
 import BigNumber from "bignumber.js";
-import * as Web3 from "web3";
+import { AbiItem } from "web3-utils";
 import {
   ECSignature,
   HowToCall,
@@ -9,6 +9,7 @@ import {
   WyvernProtocolConfig,
 } from "wyvern-js/lib/types";
 import type { Token } from "wyvern-schemas/dist/types";
+import type { OrderV2 } from "./orders/types";
 
 export { HowToCall, Network };
 export type { ECSignature };
@@ -81,6 +82,7 @@ export interface EventData {
   error?: unknown;
 
   order?: Order | UnsignedOrder;
+  orderV2?: OrderV2;
   buy?: Order;
   sell?: Order;
   matchMetadata?: string;
@@ -231,7 +233,7 @@ export interface OpenSeaAccount {
 
 export interface OpenSeaUser {
   // Username for this user
-  username: string;
+  username?: string;
 }
 
 /**
@@ -518,7 +520,6 @@ export interface OpenSeaAssetBundleQuery
   owner?: string;
   offset?: number;
   limit?: number;
-  search?: string;
 }
 
 /**
@@ -670,6 +671,7 @@ export type RawWyvernOrderJSON = Omit<
 export interface OrderQuery extends Partial<OrderJSON> {
   owner?: string;
   sale_kind?: SaleKind;
+  side?: OrderSide;
   asset_contract_address?: string;
   payment_token_address?: string;
   is_english?: boolean;
@@ -693,11 +695,11 @@ export interface OpenSeaAssetQuery {
   owner?: string;
   asset_contract_address?: string;
   token_ids?: Array<number | string>;
-  search?: string;
   order_by?: string;
   order_direction?: string;
   limit?: number;
   offset?: number;
+  cursor?: string;
 }
 
 /**
@@ -720,17 +722,4 @@ export interface OrderbookResponse {
 export type Web3Callback<T> = (err: Error | null, result: T) => void;
 export type TxnCallback = (result: boolean) => void;
 
-/**
- * To simplify typifying ABIs
- */
-interface PartialAbiDefinition {
-  type: Web3.AbiType | string;
-  name?: string;
-  inputs?: object[];
-  outputs?: object[];
-  payable?: boolean;
-  constant?: boolean;
-  anonymous?: boolean;
-  stateMutability?: Web3.ConstructorStateMutability | string;
-}
-export type PartialReadonlyContractAbi = Array<Readonly<PartialAbiDefinition>>;
+export type PartialReadonlyContractAbi = AbiItem[];

@@ -1,13 +1,13 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import * as Web3 from "web3";
+import Web3 from "web3";
 import {
   CK_ADDRESS,
   MAINNET_PROVIDER_URL,
   MAX_UINT_256,
 } from "../../constants";
 import { ERC721 } from "../../contracts";
-import { OpenSeaPort } from "../../index";
+import { OpenSeaSDK } from "../../index";
 import { Network } from "../../types";
 import {
   getNonCompliantApprovalAddress,
@@ -25,7 +25,7 @@ import {
 
 const provider = new Web3.providers.HttpProvider(MAINNET_PROVIDER_URL);
 
-const client = new OpenSeaPort(
+const client = new OpenSeaSDK(
   provider,
   {
     networkName: Network.Main,
@@ -34,16 +34,16 @@ const client = new OpenSeaPort(
   (line) => console.info(`MAINNET: ${line}`)
 );
 
-suite("seaport: misc", () => {
+suite("SDK: misc", () => {
   test("Instance has public methods", () => {
-    assert.equal(typeof client.getCurrentPrice, "function");
+    assert.equal(typeof client.getCurrentPriceLegacyWyvern, "function");
     assert.equal(typeof client.wrapEth, "function");
   });
 
   test("Instance exposes API methods", () => {
     assert.equal(typeof client.api.getOrder, "function");
     assert.equal(typeof client.api.getOrders, "function");
-    assert.equal(typeof client.api.postOrder, "function");
+    assert.equal(typeof client.api.postOrderLegacyWyvern, "function");
   });
 
   test("Instance exposes some underscored methods", () => {
@@ -74,14 +74,10 @@ suite("seaport: misc", () => {
 
   test("Single-approval tokens are approved for tester address", async () => {
     const accountAddress = ALEX_ADDRESS_2;
-    // @ts-expect-error unused
     const _proxyAddress = await client._getProxy(accountAddress);
     const tokenId = CK_TOKEN_ID.toString();
     const tokenAddress = CK_ADDRESS;
-    const erc721 = await client.web3.eth
-      .contract(ERC721 as Web3.AbiDefinition[])
-      .at(tokenAddress);
-    // @ts-expect-error unused
+    const erc721 = new client.web3.eth.Contract(ERC721, tokenAddress);
     const _approvedAddress = await getNonCompliantApprovalAddress(
       erc721,
       tokenId,

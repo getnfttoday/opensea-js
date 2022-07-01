@@ -1,18 +1,18 @@
 import { BigNumber } from "bignumber.js";
 import { assert } from "chai";
 import { before, suite, test } from "mocha";
-import * as Web3 from "web3";
+import Web3 from "web3";
 import { HowToCall } from "wyvern-js/lib/types";
 import {
-  MERKLE_VALIDATOR_MAINNET,
   ENJIN_ADDRESS,
   INVERSE_BASIS_POINT,
   MAINNET_PROVIDER_URL,
+  MERKLE_VALIDATOR_MAINNET,
   NULL_ADDRESS,
-  OPENSEA_FEE_RECIPIENT,
+  OPENSEA_LEGACY_FEE_RECIPIENT,
   RINKEBY_PROVIDER_URL,
-} from "../../../src/constants";
-import { OpenSeaPort } from "../../index";
+} from "../../constants";
+import { OpenSeaSDK } from "../../index";
 import {
   Asset,
   Network,
@@ -27,6 +27,7 @@ import {
 import {
   assignOrdersToSides,
   estimateCurrentPrice,
+  getMaxOrderExpirationTimestamp,
   makeBigNumber,
   orderFromJSON,
 } from "../../utils/utils";
@@ -54,6 +55,7 @@ import {
   WETH_ADDRESS,
 } from "../constants";
 import ordersJSONFixture from "../fixtures/orders.json";
+import { areTimestampsNearlyEqual } from "../utils";
 import { testFeesMakerOrder } from "./fees";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,7 +65,7 @@ const englishSellOrderJSON = ordersJSON[0] as OrderJSON;
 const provider = new Web3.providers.HttpProvider(MAINNET_PROVIDER_URL);
 const rinkebyProvider = new Web3.providers.HttpProvider(RINKEBY_PROVIDER_URL);
 
-const client = new OpenSeaPort(
+const client = new OpenSeaSDK(
   provider,
   {
     networkName: Network.Main,
@@ -72,7 +74,7 @@ const client = new OpenSeaPort(
   (line) => console.info(`MAINNET: ${line}`)
 );
 
-const rinkebyClient = new OpenSeaPort(
+const rinkebyClient = new OpenSeaSDK(
   rinkebyProvider,
   {
     networkName: Network.Rinkeby,
@@ -94,7 +96,7 @@ const assetsForBulkTransfer = assetsForBundleOrder;
 let manaAddress: string;
 let daiAddress: string;
 
-suite("seaport: orders", () => {
+suite("SDK: orders", () => {
   before(async () => {
     daiAddress = (await client.api.getPaymentTokens({ symbol: "DAI" }))
       .tokens[0].address;
@@ -130,7 +132,6 @@ suite("seaport: orders", () => {
       startAmount: 2,
       extraBountyBasisPoints: 0,
       buyerAddress: NULL_ADDRESS,
-      expirationTime: 0,
       paymentTokenAddress: NULL_ADDRESS,
       waitForHighestBid: false,
     });
@@ -140,7 +141,7 @@ suite("seaport: orders", () => {
 
   test("Correctly errors for invalid sell order price parameters", async () => {
     const accountAddress = ALEX_ADDRESS;
-    const expirationTime = Math.round(Date.now() / 1000 + 60); // one minute from now
+    const expirationTime = Math.round(Date.now() / 1000 + 900); // fifteen minutes from now
     const paymentTokenAddress = manaAddress;
     const tokenId = MYTHEREUM_TOKEN_ID.toString();
     const tokenAddress = MYTHEREUM_ADDRESS;
@@ -153,16 +154,13 @@ suite("seaport: orders", () => {
         startAmount: 2,
         extraBountyBasisPoints: 0,
         buyerAddress: NULL_ADDRESS,
-        expirationTime: 0,
         paymentTokenAddress,
         waitForHighestBid: true,
+        expirationTime: 0,
       });
       assert.fail();
     } catch (error) {
-      assert.include(
-        (error as Error).message,
-        "English auctions must have an expiration time"
-      );
+      assert.include((error as Error).message, "Expiration time cannot be 0");
     }
 
     try {
@@ -216,9 +214,9 @@ suite("seaport: orders", () => {
         endAmount: 1,
         extraBountyBasisPoints: 0,
         buyerAddress: NULL_ADDRESS,
-        expirationTime: 0,
         paymentTokenAddress: NULL_ADDRESS,
         waitForHighestBid: false,
+        expirationTime: 0,
       });
       assert.fail();
     } catch (error) {
@@ -237,7 +235,6 @@ suite("seaport: orders", () => {
         listingTime: Math.round(Date.now() / 1000 - 60),
         extraBountyBasisPoints: 0,
         buyerAddress: NULL_ADDRESS,
-        expirationTime: 0,
         paymentTokenAddress: NULL_ADDRESS,
         waitForHighestBid: false,
       });
@@ -315,7 +312,8 @@ suite("seaport: orders", () => {
 
   test("Correctly errors for invalid buy order price parameters", async () => {
     const accountAddress = ALEX_ADDRESS_2;
-    const expirationTime = Math.round(Date.now() / 1000 + 60); // one minute from now
+    const currentSeconds = Math.round(Date.now() / 1000);
+    const expirationTime = currentSeconds + 20 * 60; // 20 minutes from now
     const tokenId = MYTHEREUM_TOKEN_ID.toString();
     const tokenAddress = MYTHEREUM_ADDRESS;
 
@@ -343,13 +341,13 @@ suite("seaport: orders", () => {
     const takerAddress = ALEX_ADDRESS_2;
     const amountInToken = 1.2;
     const paymentTokenAddress = WETH_ADDRESS;
-    const expirationTime = Math.round(Date.now() / 1000 + 60); // one minute from now
+    const currentSeconds = Math.round(Date.now() / 1000);
+    const expirationTime = currentSeconds + 20 * 60; // 20 minutes from now
     const bountyPercent = 1.1;
 
     const tokenId = MYTHEREUM_TOKEN_ID.toString();
     const tokenAddress = MYTHEREUM_ADDRESS;
 
-    // @ts-expect-error unused
     const _asset = await client.api.getAsset({ tokenAddress, tokenId });
 
     const order = await client._makeSellOrder({
@@ -392,7 +390,7 @@ suite("seaport: orders", () => {
     const now = Math.round(Date.now() / 1000);
     // Get bid from server
     const paymentTokenAddress = WETH_ADDRESS;
-    const { orders } = await rinkebyClient.api.getOrders({
+    const { orders } = await rinkebyClient.api.getOrdersLegacyWyvern({
       side: OrderSide.Buy,
       asset_contract_address: CK_RINKEBY_ADDRESS,
       token_id: CK_RINKEBY_TOKEN_ID,
@@ -423,8 +421,8 @@ suite("seaport: orders", () => {
       buy.takerProtocolFee.toNumber(),
       sell.takerProtocolFee.toNumber()
     );
-    const sellPrice = await rinkebyClient.getCurrentPrice(sell);
-    const buyPrice = await rinkebyClient.getCurrentPrice(buy);
+    const sellPrice = await rinkebyClient.getCurrentPriceLegacyWyvern(sell);
+    const buyPrice = await rinkebyClient.getCurrentPriceLegacyWyvern(buy);
     assert.isAtLeast(buyPrice.toNumber(), sellPrice.toNumber());
     console.info(
       `Matching two orders that differ in price by ${
@@ -481,7 +479,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
       sellOrder,
     });
@@ -547,7 +544,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
       sellOrder,
     });
@@ -613,7 +609,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
       sellOrder,
     });
@@ -650,7 +645,6 @@ suite("seaport: orders", () => {
 
   test.skip("Creates ENS name buy order", async () => {
     const paymentTokenAddress = WETH_ADDRESS;
-    // @ts-expect-error unused
     const _buyOrder = await rinkebyClient._makeBuyOrder({
       asset: {
         tokenId: ENS_HELLO_TOKEN_ID,
@@ -687,7 +681,6 @@ suite("seaport: orders", () => {
       startAmount: amountInToken,
       extraBountyBasisPoints: bountyPercent * 100,
       buyerAddress: takerAddress,
-      expirationTime: 0,
       paymentTokenAddress: NULL_ADDRESS,
       waitForHighestBid: false,
     });
@@ -695,7 +688,13 @@ suite("seaport: orders", () => {
     assert.equal(order.paymentToken, NULL_ADDRESS);
     assert.equal(order.basePrice.toNumber(), Math.pow(10, 18) * amountInToken);
     assert.equal(order.extra.toNumber(), 0);
-    assert.equal(order.expirationTime.toNumber(), 0);
+    assert.notEqual(order.expirationTime.toNumber(), 0);
+    assert.isTrue(
+      areTimestampsNearlyEqual(
+        getMaxOrderExpirationTimestamp(),
+        order.expirationTime.toNumber()
+      )
+    );
     testFeesMakerOrder(order, asset.collection, bountyPercent * 100);
 
     await client._sellOrderValidationAndApprovals({ order, accountAddress });
@@ -760,13 +759,18 @@ suite("seaport: orders", () => {
       paymentTokenAddress: NULL_ADDRESS,
       extraBountyBasisPoints: 0,
       buyerAddress: NULL_ADDRESS,
-      expirationTime: 0,
       waitForHighestBid: false,
     });
 
     assert.equal(order.basePrice.toNumber(), Math.pow(10, 18) * amountInEth);
     assert.equal(order.extra.toNumber(), 0);
-    assert.equal(order.expirationTime.toNumber(), 0);
+    assert.notEqual(order.expirationTime.toNumber(), 0);
+    assert.isTrue(
+      areTimestampsNearlyEqual(
+        getMaxOrderExpirationTimestamp(),
+        order.expirationTime.toNumber()
+      )
+    );
     testFeesMakerOrder(order, asset.collection);
 
     await client._sellOrderValidationAndApprovals({ order, accountAddress });
@@ -791,7 +795,6 @@ suite("seaport: orders", () => {
       accountAddress,
       startAmount: amountInToken,
       paymentTokenAddress: paymentToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
     });
 
@@ -799,7 +802,13 @@ suite("seaport: orders", () => {
     assert.equal(order.paymentToken, paymentToken);
     assert.equal(order.basePrice.toNumber(), Math.pow(10, 18) * amountInToken);
     assert.equal(order.extra.toNumber(), 0);
-    assert.equal(order.expirationTime.toNumber(), 0);
+    assert.notEqual(order.expirationTime.toNumber(), 0);
+    assert.isTrue(
+      areTimestampsNearlyEqual(
+        getMaxOrderExpirationTimestamp(),
+        order.expirationTime.toNumber()
+      )
+    );
     testFeesMakerOrder(order, asset.collection);
 
     await client._buyOrderValidationAndApprovals({ order, accountAddress });
@@ -828,7 +837,6 @@ suite("seaport: orders", () => {
       paymentTokenAddress: paymentToken.address,
       extraBountyBasisPoints: bountyPercent * 100,
       buyerAddress: NULL_ADDRESS, // Check that null doesn't trigger private orders
-      expirationTime: 0,
       waitForHighestBid: false,
     });
 
@@ -838,7 +846,13 @@ suite("seaport: orders", () => {
       Math.pow(10, paymentToken.decimals) * amountInToken
     );
     assert.equal(order.extra.toNumber(), 0);
-    assert.equal(order.expirationTime.toNumber(), 0);
+    assert.notEqual(order.expirationTime.toNumber(), 0);
+    assert.isTrue(
+      areTimestampsNearlyEqual(
+        getMaxOrderExpirationTimestamp(),
+        order.expirationTime.toNumber()
+      )
+    );
     testFeesMakerOrder(order, asset.collection, bountyPercent * 100);
 
     await client._sellOrderValidationAndApprovals({ order, accountAddress });
@@ -864,7 +878,6 @@ suite("seaport: orders", () => {
       accountAddress,
       startAmount: amountInToken,
       paymentTokenAddress: paymentToken.address,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
     });
 
@@ -875,7 +888,13 @@ suite("seaport: orders", () => {
       Math.pow(10, paymentToken.decimals) * amountInToken
     );
     assert.equal(order.extra.toNumber(), 0);
-    assert.equal(order.expirationTime.toNumber(), 0);
+    assert.notEqual(order.expirationTime.toNumber(), 0);
+    assert.isTrue(
+      areTimestampsNearlyEqual(
+        getMaxOrderExpirationTimestamp(),
+        order.expirationTime.toNumber()
+      )
+    );
     testFeesMakerOrder(order, asset.collection);
 
     await client._buyOrderValidationAndApprovals({ order, accountAddress });
@@ -886,9 +905,10 @@ suite("seaport: orders", () => {
   test("Serializes payment token and matches most recent ERC-20 sell order", async () => {
     const takerAddress = ALEX_ADDRESS;
 
-    const order = await client.api.getOrder({
+    const order = await client.api.getOrderLegacyWyvern({
       side: OrderSide.Sell,
       payment_token_address: manaAddress,
+      taker: NULL_ADDRESS,
     });
 
     assert.isNotNull(order.paymentTokenContract);
@@ -934,9 +954,11 @@ suite("seaport: orders", () => {
     assert.isNotEmpty(all);
   });
 
-  test("orderToJSON computes correct current price for Dutch auctions", async () => {
-    const { orders } = await client.api.getOrders({
+  // Temp skip due to migration
+  test.skip("orderToJSON computes correct current price for Dutch auctions", async () => {
+    const { orders } = await client.api.getOrdersLegacyWyvern({
       sale_kind: SaleKind.DutchAuction,
+      side: OrderSide.Sell,
     });
     assert.equal(orders.length, client.api.pageSize);
     orders.map((order) => {
@@ -968,7 +990,7 @@ suite("seaport: orders", () => {
 
   // Skipping brittle test, due to token id dependency
   test.skip("orderToJSON current price includes buyer fee", async () => {
-    const { orders } = await client.api.getOrders({
+    const { orders } = await client.api.getOrdersLegacyWyvern({
       sale_kind: SaleKind.FixedPrice,
       asset_contract_address: CRYPTOFLOWERS_CONTRACT_ADDRESS_WITH_BUYER_FEE,
       token_id: 8645,
@@ -992,8 +1014,9 @@ suite("seaport: orders", () => {
     });
   });
 
-  test("orderToJSON current price does not include buyer fee for English auctions", async () => {
-    const { orders } = await client.api.getOrders({
+  // Flaky due to DB statement timeout
+  test.skip("orderToJSON current price does not include buyer fee for English auctions", async () => {
+    const { orders } = await client.api.getOrdersLegacyWyvern({
       side: OrderSide.Sell,
       is_english: true,
     });
@@ -1012,7 +1035,9 @@ suite("seaport: orders", () => {
   });
 
   test.skip("Matches first buy order in book", async () => {
-    const order = await client.api.getOrder({ side: OrderSide.Buy });
+    const order = await client.api.getOrderLegacyWyvern({
+      side: OrderSide.Buy,
+    });
     assert.isNotNull(order);
     if (!order) {
       return;
@@ -1031,7 +1056,7 @@ suite("seaport: orders", () => {
     // Need to use a taker who has created a proxy and approved W-ETH already
     const takerAddress = ALEX_ADDRESS;
 
-    const order = await client.api.getOrder({
+    const order = await client.api.getOrderLegacyWyvern({
       side: OrderSide.Buy,
       owner: takerAddress,
       // Use a token that has already been approved via approve-all
@@ -1068,7 +1093,6 @@ suite("seaport: orders", () => {
       startAmount: 2,
       extraBountyBasisPoints: 0,
       buyerAddress: NULL_ADDRESS,
-      expirationTime: 0,
       paymentTokenAddress: NULL_ADDRESS,
       waitForHighestBid: false,
     });
@@ -1100,7 +1124,6 @@ suite("seaport: orders", () => {
       startAmount: 2,
       extraBountyBasisPoints: 0,
       buyerAddress: NULL_ADDRESS,
-      expirationTime: 0,
       paymentTokenAddress: NULL_ADDRESS,
       waitForHighestBid: false,
     });
@@ -1127,7 +1150,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
     });
 
@@ -1153,7 +1175,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
     });
 
@@ -1201,7 +1222,6 @@ suite("seaport: orders", () => {
       accountAddress,
       paymentTokenAddress,
       startAmount: amountInToken,
-      expirationTime: 0,
       extraBountyBasisPoints: 0,
       sellOrder,
     });
@@ -1212,6 +1232,186 @@ suite("seaport: orders", () => {
       "0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
     );
     assert.equal(buyOrder.howToCall, HowToCall.Call);
+  });
+
+  suite("Expiration times", () => {
+    test("it fails when expiration time is 0", async () => {
+      const accountAddress = ALEX_ADDRESS;
+      const paymentTokenAddress = manaAddress;
+      const tokenId = MYTHEREUM_TOKEN_ID.toString();
+      const tokenAddress = MYTHEREUM_ADDRESS;
+
+      try {
+        await client._makeSellOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          buyerAddress: NULL_ADDRESS,
+          paymentTokenAddress,
+          waitForHighestBid: false,
+          expirationTime: 0,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include((error as Error).message, "Expiration time cannot be 0");
+      }
+
+      try {
+        await client._makeBuyOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          paymentTokenAddress,
+          expirationTime: 0,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include((error as Error).message, "Expiration time cannot be 0");
+      }
+    });
+
+    test("it fails when expiration time exceeds six months", async () => {
+      const accountAddress = ALEX_ADDRESS;
+      const paymentTokenAddress = manaAddress;
+      const tokenId = MYTHEREUM_TOKEN_ID.toString();
+      const tokenAddress = MYTHEREUM_ADDRESS;
+
+      const expirationDate = new Date();
+
+      expirationDate.setMonth(expirationDate.getMonth() + 7);
+
+      const expirationTime = Math.round(expirationDate.getTime() / 1000);
+
+      try {
+        await client._makeSellOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          buyerAddress: NULL_ADDRESS,
+          paymentTokenAddress,
+          waitForHighestBid: false,
+          expirationTime,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include(
+          (error as Error).message,
+          "Expiration time must not exceed six months from now"
+        );
+      }
+
+      try {
+        await client._makeBuyOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          paymentTokenAddress,
+          expirationTime,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include(
+          (error as Error).message,
+          "Expiration time must not exceed six months from now"
+        );
+      }
+    });
+
+    test("it handles expiration time duration correctly", async () => {
+      const accountAddress = ALEX_ADDRESS;
+      const paymentTokenAddress = manaAddress;
+      const tokenId = MYTHEREUM_TOKEN_ID.toString();
+      const tokenAddress = MYTHEREUM_ADDRESS;
+
+      // Added buffer
+      const listingTime = Math.floor(new Date().getTime() / 1000) + 60;
+
+      // 10 minutes after
+      const expirationTime = listingTime + 600;
+
+      try {
+        await client._makeSellOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          buyerAddress: NULL_ADDRESS,
+          paymentTokenAddress,
+          waitForHighestBid: false,
+          listingTime,
+          expirationTime,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include(
+          (error as Error).message,
+          `Expiration time must be at least 15 minutes from the listing date`
+        );
+      }
+
+      try {
+        await client._makeBuyOrder({
+          asset: { tokenAddress, tokenId },
+          quantity: 1,
+          accountAddress,
+          startAmount: 2,
+          extraBountyBasisPoints: 0,
+          paymentTokenAddress,
+          expirationTime,
+        });
+        assert.fail();
+      } catch (error) {
+        assert.include(
+          (error as Error).message,
+          `Expiration time must be at least 15 minutes from the listing date`
+        );
+      }
+
+      const twentyMinuteExpirationTime = expirationTime + 600;
+
+      const sellOrder = await client._makeSellOrder({
+        asset: { tokenAddress, tokenId },
+        quantity: 1,
+        accountAddress,
+        startAmount: 2,
+        extraBountyBasisPoints: 0,
+        buyerAddress: NULL_ADDRESS,
+        paymentTokenAddress,
+        waitForHighestBid: false,
+        listingTime,
+        // 20 minutes after listing time
+        expirationTime: twentyMinuteExpirationTime,
+      });
+
+      assert.equal(
+        sellOrder["expirationTime"].toNumber(),
+        twentyMinuteExpirationTime
+      );
+
+      const buyOrder = await client._makeBuyOrder({
+        asset: { tokenAddress, tokenId },
+        quantity: 1,
+        accountAddress,
+        startAmount: 2,
+        extraBountyBasisPoints: 0,
+        paymentTokenAddress,
+        expirationTime: twentyMinuteExpirationTime,
+      });
+
+      assert.equal(
+        buyOrder["expirationTime"].toNumber(),
+        twentyMinuteExpirationTime
+      );
+    });
   });
 });
 
@@ -1242,7 +1442,7 @@ async function testMatchingOrder(
   if (testAtomicMatch && !order.waitingForBestCounterOrder) {
     const isValid = await client._validateOrder(order);
     assert.isTrue(isValid);
-    const isFulfillable = await client.isOrderFulfillable({
+    const isFulfillable = await client.isOrderFulfillableLegacyWyvern({
       order,
       accountAddress,
       recipientAddress,
@@ -1270,7 +1470,7 @@ export async function testMatchingNewOrder(
   assert.equal(matchingOrder.makerProtocolFee.toNumber(), 0);
   assert.equal(matchingOrder.takerProtocolFee.toNumber(), 0);
   if (order.waitingForBestCounterOrder) {
-    assert.equal(matchingOrder.feeRecipient, OPENSEA_FEE_RECIPIENT);
+    assert.equal(matchingOrder.feeRecipient, OPENSEA_LEGACY_FEE_RECIPIENT);
   } else {
     assert.equal(matchingOrder.feeRecipient, NULL_ADDRESS);
   }

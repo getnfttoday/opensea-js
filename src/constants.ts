@@ -1,12 +1,15 @@
 import { WyvernProtocol } from "wyvern-js";
+import { Network } from "./types";
 
 export const DEFAULT_GAS_INCREASE_FACTOR = 1.01;
 export const NULL_ADDRESS = WyvernProtocol.NULL_ADDRESS;
 export const NULL_BLOCK_HASH =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
-export const OPENSEA_FEE_RECIPIENT =
+export const OPENSEA_LEGACY_FEE_RECIPIENT =
   "0x5b3256965e7c3cf26e11fcaf296dfc8807c01073";
-export const INVERSE_BASIS_POINT = 10000;
+export const OPENSEA_FEE_RECIPIENT =
+  "0x8de9c5a032463c561423387a9648c5c7bcc5bc90";
+export const INVERSE_BASIS_POINT = 10_000; // 100 basis points per 1%
 export const MAX_UINT_256 = WyvernProtocol.MAX_UINT_256;
 export const ENJIN_COIN_ADDRESS = "0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c";
 export const MANA_ADDRESS = "0x0f5d2fb29fb7d3cfee444a200298f468908cc942";
@@ -50,7 +53,8 @@ export const DEFAULT_BUYER_FEE_BASIS_POINTS = 0;
 export const DEFAULT_SELLER_FEE_BASIS_POINTS = 250;
 export const OPENSEA_SELLER_BOUNTY_BASIS_POINTS = 100;
 export const DEFAULT_MAX_BOUNTY = DEFAULT_SELLER_FEE_BASIS_POINTS;
-export const MIN_EXPIRATION_SECONDS = 10;
+export const MIN_EXPIRATION_MINUTES = 15;
+export const MAX_EXPIRATION_MONTHS = 3;
 export const ORDER_MATCHING_LATENCY_SECONDS = 60 * 60 * 24 * 7;
 export const SELL_ORDER_BATCH_SIZE = 3;
 export const ORDERBOOK_VERSION = 1 as number;
@@ -105,3 +109,22 @@ export const MERKLE_VALIDATOR_MAINNET =
   "0xbaf2127b49fc93cbca6269fade0f7f31df4c88a7";
 export const MERKLE_VALIDATOR_RINKEBY =
   "0x45b594792a5cdc008d0de1c1d69faa3d16b3ddc1";
+
+export const CROSS_CHAIN_DEFAULT_CONDUIT_KEY =
+  "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000";
+const CROSS_CHAIN_DEFAULT_CONDUIT =
+  "0x1e0049783f008a0085193e00003d00cd54003c71";
+
+export const CONDUIT_KEYS_TO_CONDUIT = {
+  [CROSS_CHAIN_DEFAULT_CONDUIT_KEY]: CROSS_CHAIN_DEFAULT_CONDUIT,
+};
+
+export const WETH_ADDRESS_BY_NETWORK = {
+  [Network.Main]: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  [Network.Rinkeby]: "0xc778417e063141139fce010982780140aa0cd5ab",
+} as const;
+
+export const DEFAULT_ZONE_BY_NETWORK = {
+  [Network.Main]: "0x004c00500000ad104d7dbd00e3ae0a5c00560c00",
+  [Network.Rinkeby]: "0x00000000e88fe2628ebc5da81d2b3cead633e89e",
+} as const;
