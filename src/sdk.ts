@@ -4585,7 +4585,7 @@ export class OpenSeaSDK {
     // let shouldValidateSell = true;
     // // Only check buy, but shouldn't matter as they should always be equal
     //const wyvernProtocol = this._getWyvernProtocolForOrder(buy);
-    const wyvernProtocolReadOnly = this._getWyvernProtocolForOrder(buy, true);
+    //const wyvernProtocolReadOnly = this._getWyvernProtocolForOrder(buy, true);
 
     // if (sell.maker.toLowerCase() == accountAddress.toLowerCase()) {
     //   // USER IS THE SELLER, only validate the buy order
@@ -4719,7 +4719,7 @@ export class OpenSeaSDK {
       console.log('estimate gas error:', err);
     }
     */
-    const encoded = wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
+    const encoded = this._wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
           args[0],
           args[1],
           args[2],
