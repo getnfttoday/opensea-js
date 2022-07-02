@@ -4719,7 +4719,7 @@ export class OpenSeaSDK {
       console.log('estimate gas error:', err);
     }
     */
-    const encoded = this._wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.getABIEncodedTransactionData(
+    const encoded = this._wyvernProtocolReadOnly.wyvernExchange.atomicMatch_(
           args[0],
           args[1],
           args[2],
@@ -4731,7 +4731,7 @@ export class OpenSeaSDK {
           args[8],
           args[9],
           args[10],
-        );
+        ).getABIEncodedTransactionData();
 
     // } catch (error) {
     //   console.error(`Failed atomic match with args: `, args, error);
